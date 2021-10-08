@@ -5,17 +5,20 @@ from json import load
 from typing import Dict, List
 
 file_path = path.abspath(__file__)
-def load_extension_manage_file():
+def load_extension_manage_file(file_path=path.join(r"lm_dataformat",r"extension.json")):
     """
     Loads the extension managememnt file for filtering..
     """
-    return load(open(path.join("lm_dataformat",r"extension.json"),"r"))
+    return load(open(file_path,"r"))
 
 
 
 class FilterData:
-    def __init__(self) -> None:
-        self.filter_extension = load_extension_manage_file()
+    def __init__(self,ext_file_path=None) -> None:
+        if ext_file_path != None:
+            self.filter_extension = load_extension_manage_file(ext_file_path)
+        else:
+            self.filter_extension = load_extension_manage_file()
     
     def filter_file_extension(self,datapoint):
         """
@@ -46,5 +49,4 @@ class FilterData:
         return filtered_datapoint
 
 if __name__ == "__main__":
-    None
     print(FilterData()([{"file_name":"ast.py"},{"file_name":"ast.json"}]))
