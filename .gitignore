@@ -1,3 +1,6 @@
 env
 *.pyc
 *.egg-info
+data_trial
+output_trial
+tf_record.sh

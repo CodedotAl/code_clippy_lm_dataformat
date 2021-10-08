@@ -13,6 +13,10 @@ from math import ceil
 import mmap
 import multiprocessing as mp
 from pathlib import Path
+#TODO : Hook FilterData Class for processing and additional processing.
+from code_clippy_data_utils import FilterData
+
+filter_data_class = FilterData()
 
 VALID_EXTENSIONS = ['openwebtext.tar.xz', '_data.xz', '.dat.zst', '.jsonl', '.jsonl.zst', '.jsonl.zst.tar', '.json.zst', '.txt', '.zip', '.tar.gz', '.json.gz', '.gz']
 
@@ -108,16 +112,19 @@ def handle_jsonl(jsonl_reader, get_meta, autojoin_paragraphs, para_joiner, key='
             assert not get_meta
             yield ob
             continue
+        #TODO : reading file name of the datapoint and pass the FilterData util
+        if filter_data_class.filter_file_extension(ob):     
+            text = ob[key]
+            text = ob["file_name"] + r"\n" + text
+            if autojoin_paragraphs and isinstance(text, list):
+                text = para_joiner.join(text)
 
-        text = ob[key]
-
-        if autojoin_paragraphs and isinstance(text, list):
-            text = para_joiner.join(text)
-
-        if get_meta:
-            yield text, (ob['meta'] if 'meta' in ob else {})
+            if get_meta:
+                yield text, (ob['meta'] if 'meta' in ob else {})
+            else:
+                yield text
         else:
-            yield text
+            pass
 
 
 class Reader:
