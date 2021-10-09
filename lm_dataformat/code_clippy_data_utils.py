@@ -19,6 +19,8 @@ class FilterData:
             self.filter_extension = load_extension_manage_file(ext_file_path)
         else:
             self.filter_extension = load_extension_manage_file()
+        # generate volume statistics
+        self.stat_extension = {ext:0 for ext in self.filter_extension["additive_extensions"]+["total"]}
     
     def filter_file_extension(self,datapoint):
         """
@@ -27,10 +29,9 @@ class FilterData:
         """
         file_name  =  datapoint["file_name"]
         if file_name.split(".")[-1] in self.filter_extension["additive_extensions"]:
+            self.stat_extension[file_name.split(".")[-1]] += 1
+            self.stat_extension["total"] += 1
             return True
-        elif file_name.split(".")[-1] not in self.filter_extension["additive_extensions"]:
-            if file_name.split(".")[-1] not in self.filter_extension["deductive_extensions"]:
-                return True
         else:
             return False
     def __call__(self,datapoint_list:List[Dict]):
@@ -41,7 +42,6 @@ class FilterData:
         filtered_datapoint = []
         for datapoint in datapoint_list:
             check_dict["filter_path_check"] = self.filter_file_extension(datapoint) #should have "file_name" key
-            print(list(check_dict.values()))
             if set(list(check_dict.values())) == set([True]) :
                 filtered_datapoint.append(datapoint)
             else:

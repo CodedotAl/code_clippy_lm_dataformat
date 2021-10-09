@@ -14,9 +14,8 @@ import mmap
 import multiprocessing as mp
 from pathlib import Path
 #TODO : Hook FilterData Class for processing and additional processing.
-from code_clippy_data_utils import FilterData
+from .code_clippy_data_utils import FilterData
 
-filter_data_class = FilterData()
 
 VALID_EXTENSIONS = ['openwebtext.tar.xz', '_data.xz', '.dat.zst', '.jsonl', '.jsonl.zst', '.jsonl.zst.tar', '.json.zst', '.txt', '.zip', '.tar.gz', '.json.gz', '.gz']
 
@@ -105,31 +104,36 @@ def tarfile_reader(file, streaming=False):
             yield file.read(padded_size)[:size]
         offset += padded_size
 
-def handle_jsonl(jsonl_reader, get_meta, autojoin_paragraphs, para_joiner, key='text'):
-    for ob in jsonl_reader:
-        # naive jsonl where each object is just the string itself, with no meta. For legacy compatibility.
-        if isinstance(ob, str):
-            assert not get_meta
-            yield ob
-            continue
-        #TODO : reading file name of the datapoint and pass the FilterData util
-        if filter_data_class.filter_file_extension(ob):     
-            text = ob[key]
-            text = ob["file_name"] + r"\n" + text
-            if autojoin_paragraphs and isinstance(text, list):
-                text = para_joiner.join(text)
+# def handle_jsonl(jsonl_reader, get_meta, autojoin_paragraphs, para_joiner, key='text'):
+#     """
+#     OBSOLETE
+#     """
+#     for ob in jsonl_reader:
+#         # naive jsonl where each object is just the string itself, with no meta. For legacy compatibility.
+#         if isinstance(ob, str):
+#             assert not get_meta
+#             yield ob
+#             continue
+#         #TODO : reading file name of the datapoint and pass the FilterData util
+#         if filter_data_class.filter_file_extension(ob):     
+#             text = ob[key]
+#             text = ob["file_name"] + r"#@#@#" + text
+#             if autojoin_paragraphs and isinstance(text, list):
+#                 text = para_joiner.join(text)
 
-            if get_meta:
-                yield text, (ob['meta'] if 'meta' in ob else {})
-            else:
-                yield text
-        else:
-            pass
+#             if get_meta:
+#                 yield text, (ob['meta'] if 'meta' in ob else {})
+#             else:
+#                 yield text
+#         else:
+#             pass
 
 
 class Reader:
-    def __init__(self, in_path):
+    def __init__(self, in_path,extension_path):
         self.in_path = in_path
+        self.filter_data_class = FilterData(extension_path)
+        self.spl_split_token = r"_#@#_" #special split token to take out the file extension.
     
     def stream_data(self, get_meta=False, threaded=False):
         if not threaded:
@@ -138,12 +142,11 @@ class Reader:
 
         q = mp.Queue(1000)
         p = mp.Process(target=self._stream_data_threaded, args=(q, get_meta))
-        p.start()
+        p.start() 
         while p.is_alive():
             res = q.get()
             if res is None: break
             yield res
-    
     def _stream_data_threaded(self, q, get_meta=False):
         for data in self._stream_data(get_meta):
             q.put(data)
@@ -201,7 +204,14 @@ class Reader:
             else:
                 # shouldn't be reached
                 print(f'Skipping {f} as streaming for that filetype is not implemented')
-
+        #adding "stat_logs/pl_stat.json" logging 
+        self.log_stat_json(self.filter_data_class.stat_extension)
+    
+    def log_stat_json(self,json_dict):
+        log_stat_path = os.path.join(r"mesh-transformer-jax",r"stat_logs",r"pl_stat.json")
+        with open(log_stat_path, 'w+') as f:
+            json.dump(json_dict, f)
+        return None
     def read_txt(self, file):
         with open(file, 'r') as fh:
             yield fh.read()
@@ -246,14 +256,14 @@ class Reader:
 
     def read_jsonl(self, file, get_meta=False, autojoin_paragraphs=True, para_joiner='\n\n', key='text'):
         with jsonlines.open(file) as rdr:
-            yield from handle_jsonl(rdr, get_meta, autojoin_paragraphs, para_joiner, key)
+            yield from self.handle_jsonl(rdr, get_meta, autojoin_paragraphs, para_joiner, key)
             
     def read_jsonl_zst(self, file, get_meta=False, autojoin_paragraphs=True, para_joiner='\n\n', key='text'):
         with open(file, 'rb') as fh:
             cctx = zstandard.ZstdDecompressor()
             reader = io.BufferedReader(cctx.stream_reader(fh))
             rdr = jsonlines.Reader(reader)
-            yield from handle_jsonl(rdr, get_meta, autojoin_paragraphs, para_joiner, key)
+            yield from self.handle_jsonl(rdr, get_meta, autojoin_paragraphs, para_joiner, key)
 
     def read_jsonl_tar(self, file, get_meta=False, autojoin_paragraphs=True, para_joiner='\n\n', key='text'):
         with open(file, 'rb') as fh:
@@ -261,7 +271,7 @@ class Reader:
                 cctx = zstandard.ZstdDecompressor()
                 reader = io.BufferedReader(cctx.stream_reader(f))
                 rdr = jsonlines.Reader(reader)
-                yield from handle_jsonl(rdr, get_meta, autojoin_paragraphs, para_joiner, key)
+                yield from self.handle_jsonl(rdr, get_meta, autojoin_paragraphs, para_joiner, key)
                 f.close()
             
     def read_owt(self, file):
@@ -283,8 +293,26 @@ class Reader:
             fp = utf8reader(tar.extractfile(name))
             contents = fp.read()
             yield contents
-
-
+    def handle_jsonl(self,jsonl_reader, get_meta, autojoin_paragraphs, para_joiner, key='text'):
+            for ob in jsonl_reader:
+                # naive jsonl where each object is just the string itself, with no meta. For legacy compatibility.
+                if isinstance(ob, str):
+                    assert not get_meta
+                    yield ob
+                    continue
+                #TODO : reading file name of the datapoint and pass the FilterData util
+                filter_flag = self.filter_data_class.filter_file_extension(ob["meta"])
+                if filter_flag:   
+                    text = ob[key]
+                    text = ob["meta"]["file_name"] + self.spl_split_token + text
+                    if autojoin_paragraphs and isinstance(text, list):
+                        text = para_joiner.join(text)
+                    if get_meta:
+                        yield text, (ob['meta'] if 'meta' in ob else {})
+                    else:
+                        yield text
+                else:
+                    pass
 class Archive:
     def __init__(self, out_dir, compression_level=3):
         self.out_dir = out_dir
@@ -339,6 +367,7 @@ class DatArchive:
 
         self.i += 1
         self.data = []
+    
 
 class JSONArchive:
     def __init__(self, out_dir):
