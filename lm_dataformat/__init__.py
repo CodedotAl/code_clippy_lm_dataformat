@@ -205,13 +205,7 @@ class Reader:
                 # shouldn't be reached
                 print(f'Skipping {f} as streaming for that filetype is not implemented')
         #adding "stat_logs/pl_stat.json" logging 
-        self.log_stat_json(self.filter_data_class.stat_extension)
-    
-    def log_stat_json(self,json_dict):
-        log_stat_path = os.path.join(r"mesh-transformer-jax",r"stat_logs",r"pl_stat.json")
-        with open(log_stat_path, 'w+') as f:
-            json.dump(json_dict, f)
-        return None
+        #self.log_stat_json(self.filter_data_class.stat_extension)
     def read_txt(self, file):
         with open(file, 'r') as fh:
             yield fh.read()
