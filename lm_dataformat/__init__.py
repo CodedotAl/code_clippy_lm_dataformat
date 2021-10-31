@@ -295,7 +295,7 @@ class Reader:
                     yield ob
                     continue
                 #TODO : reading file name of the datapoint and pass the FilterData util
-                filter_flag = self.filter_data_class.filter_file_extension(ob["meta"])
+                filter_flag = self.filter_data_class.filter_file_extension(ob) #reshinth - Changed meta to file utils.
                 if filter_flag:   
                     text = ob[key]
                     text = ob["meta"]["file_name"] + self.spl_split_token + text
